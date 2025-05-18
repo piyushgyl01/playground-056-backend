@@ -401,6 +401,55 @@ app.get("/posts/:id", async (req, res) => {
   }
 });
 
+app.put("/posts/:id/favorite", verifyToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const isAlreadyFavorited =
+      user.favouritePosts && user.favouritePosts.includes(post._id);
+
+    if (isAlreadyFavorited) {
+      user.favouritePosts = user.favouritePosts.filter(
+        (id) => id.toString() !== post._id.toString()
+      );
+      post.favouritesCount = Math.max(0, post.favouritesCount - 1);
+    } else {
+      if (!user.favouritePosts) {
+        user.favouritePosts = [];
+      }
+
+      user.favouritePosts.push(post._id);
+
+      post.favouritesCount = (post.favouritesCount || 0) + 1;
+    }
+
+    await user.save();
+    await post.save();
+
+    res.status(200).json({
+      message: "Favorite toggled",
+      post: {
+        ...post.toObject(),
+        favorited: !isAlreadyFavorited,
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on ${PORT}`);
 });
