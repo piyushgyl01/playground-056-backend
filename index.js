@@ -285,6 +285,122 @@ app.put("/auth/user", verifyToken, async (req, res) => {
   }
 });
 
+app.post("/posts", verifyToken, async (req, res) => {
+  const { title, description, body, tagList } = req.body;
+
+  if (!title || !description || !body) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  const id = req.user.id;
+
+  try {
+    const newPost = new Post({
+      title,
+      description,
+      body,
+      tagList,
+      author: id,
+    });
+
+    const savedPost = await newPost.save();
+
+    res
+      .status(201)
+      .json({ message: "Post created successfully", post: savedPost });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.delete("/posts/:id", verifyToken, async (req, res) => {
+  const id = req.user.id;
+
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.author.toString() !== id) {
+      return res
+        .status(403)
+        .json({ message: "Only the author can delete this post" });
+    }
+
+    await Post.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ message: "Post deleted successfully", post: post });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.put("/posts/:id", verifyToken, async (req, res) => {
+  const id = req.user.id;
+
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.author.toString() !== id) {
+      return res
+        .status(403)
+        .json({ message: "Only the author can edit this post" });
+    }
+
+    const updatedPost = await Post.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: "Post updated successfully",
+      post: updatedPost,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.get("/posts", async (req, res) => {
+  try {
+    const posts = await Post.find().populate("author", "name username image");
+
+    res.status(200).json({ posts });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.get("/posts/:id", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).populate(
+      "author",
+      "name username image"
+    );
+
+    res.status(200).json({ post });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on ${PORT}`);
 });
