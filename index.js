@@ -450,6 +450,143 @@ app.put("/posts/:id/favorite", verifyToken, async (req, res) => {
   }
 });
 
+app.post("/posts/:id/comments", verifyToken, async (req, res) => {
+  try {
+    const id = req.user.id;
+
+    const commenter = await User.findById(id);
+
+    if (!commenter) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const { body } = req.body;
+
+    const newComment = new Comment({
+      body,
+      author: commenter._id,
+      post: post._id,
+    });
+
+    await newComment.save();
+
+    post.comments.push(newComment._id);
+    await post.save();
+
+    res.status(201).json({ message: "Comment added", comment: newComment });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.get("/posts/:id/comments", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).populate({
+      path: "comments",
+      populate: {
+        path: "author",
+        select: "username name image",
+      },
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(200).json({ comments: post.comments });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.delete("/posts/:id/comments/:commentId", verifyToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const comment = await Comment.findById(req.params.commentId);
+
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.author.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "Only the author of the comment can delete the comment",
+      });
+    }
+
+    post.comments = post.comments.filter(
+      (id) => id.toString() !== comment._id.toString()
+    );
+
+    await post.save();
+
+    await Comment.findByIdAndDelete(req.params.commentId);
+
+    res
+      .status(200)
+      .json({ message: "Comment has been successfully deleted", comment });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
+app.put("/posts/:id/comments/:commentId", verifyToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const comment = await Comment.findById(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    if (comment.author.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "Only the author of the comment can edit the comment",
+      });
+    }
+
+    const { body } = req.body;
+    if (!body) {
+      return res.status(400).json({ message: "Comment body is required" });
+    }
+
+    const updatedComment = await Comment.findByIdAndUpdate(
+      req.params.commentId,
+      { body },
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: "Comment has been successfully edited",
+      comment: updatedComment,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on ${PORT}`);
 });
